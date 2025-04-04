@@ -15,6 +15,7 @@ interface PlayingCardProps {
     value: number; // 0-13，其中0为Joker，1为Ace，11-13为J,Q,K
     className?: string;
     suit?: "spade" | "heart" | "diamond" | "club"; // 可选的花色属性
+    size?: "small" | "medium" | "large"; // 添加尺寸属性
 }
 
 export function PlayingCard({ value, className, suit = "spade" }: PlayingCardProps) {

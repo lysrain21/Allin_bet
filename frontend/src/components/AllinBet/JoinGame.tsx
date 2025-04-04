@@ -71,7 +71,8 @@ export function JoinGame() {
             });
 
             // 从交易详情中获取事件
-            const events = txDetails.events || [];
+            // 使用可选链来安全地访问可能不存在的属性
+            const events = (txDetails as any)?.events || [];
 
             // 查找FirstNumberDrawn事件和GameResult事件
             let firstNumberEvent = null;
