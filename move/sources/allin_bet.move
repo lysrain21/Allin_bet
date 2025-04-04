@@ -137,7 +137,22 @@ module allin_addr::allin_bet {
             first_number: number_drawn1
         });
         
-        // Save game state, waiting for player to decide whether to continue or exit
+        // Special rule: if the first random number is 0, player loses immediately
+        if (number_drawn1 == 0) {
+            // Emit game result event, marking as direct loss
+            event::emit(GameResult {
+                player: player_address,
+                number1: number_drawn1,
+                number2: 0,  // Second random number not needed
+                player_product: 0, // Player's result is 0
+                target_product: (game.target_number1 as u64) * (game.target_number2 as u64),
+                is_win: false
+            });
+            // Don't save game state, game ends immediately
+            return
+        };
+        
+        // If random number is not 0, save game state and wait for player's decision to continue
         vector::push_back(&mut game.pending_games, PendingGame {
             player_address: player_address,
             entry_fee,

@@ -78,7 +78,7 @@ export function GameInfo({ gameAddress }: { gameAddress: string }) {
     }
 
     return (
-        <div className="nes-container with-title p-3 mt-3 mb-3">
+        <div className="nes-container is-dark with-title p-3 mt-3 mb-3">
             <p className="title">游戏详情</p>
             <div className="flex justify-center gap-4 mb-4">
                 <div className="flex flex-col items-center">

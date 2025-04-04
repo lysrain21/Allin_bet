@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { getAptosClient } from "@/utils/aptosClient";
 import { cn } from "@/utils/styling";
@@ -8,6 +8,11 @@ import { ABI } from "@/utils/abi";
 import { PlayingCard } from "@/components/Cards/PlayingCard";
 
 const aptosClient = getAptosClient();
+
+const getMinimumEntry = (deposit: string): number => {
+    const depositValue = parseFloat(deposit);
+    return depositValue / 10;
+};
 
 export function CreateGame() {
     const { account, signAndSubmitTransaction } = useWallet();
@@ -18,6 +23,13 @@ export function CreateGame() {
     const [isCreating, setIsCreating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<boolean>(false);
+
+    useEffect(() => {
+        const minimumEntry = getMinimumEntry(initialDeposit);
+        if (parseFloat(minEntry) < minimumEntry) {
+            setMinEntry(minimumEntry.toFixed(1));
+        }
+    }, [initialDeposit]);
 
     // 将数字转换为卡牌名称的辅助函数
     const getCardName = (value: number): string => {
@@ -41,9 +53,16 @@ export function CreateGame() {
         try {
             const num1 = parseInt(targetNumber1);
             const num2 = parseInt(targetNumber2);
+            const depositAmount = parseFloat(initialDeposit);
+            const entryFee = parseFloat(minEntry);
 
             if (num1 >= 14 || num2 >= 14 || num1 < 0 || num2 < 0) {
                 throw new Error("目标数字必须在0到13之间");
+            }
+
+            const minimumEntryRequired = depositAmount / 10;
+            if (entryFee < minimumEntryRequired) {
+                throw new Error(`最低入场费不能小于初始存款的十分之一 (${minimumEntryRequired.toFixed(2)} APT)`);
             }
 
             const response = await signAndSubmitTransaction({
@@ -138,11 +157,14 @@ export function CreateGame() {
                         type="number"
                         className="nes-input"
                         step="0.1"
-                        min="0.1"
+                        min={getMinimumEntry(initialDeposit)}
                         value={minEntry}
                         onChange={(e) => setMinEntry(e.target.value)}
                         required
                     />
+                    <p className="text-xs text-yellow-200 mt-1">
+                        *最低入场费必须至少为初始存款的十分之一 ({getMinimumEntry(initialDeposit).toFixed(2)} APT)
+                    </p>
                 </div>
 
                 <button

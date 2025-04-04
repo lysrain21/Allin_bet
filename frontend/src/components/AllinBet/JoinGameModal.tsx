@@ -18,7 +18,7 @@ interface JoinGameModalProps {
 }
 
 // Game state enum
-type GameState = "input" | "processing" | "first-draw" | "decision" | "processing-continue" | "result";
+type GameState = "input" | "processing" | "first-draw" | "decision" | "processing-continue" | "result" | "joker-fail";
 
 export function JoinGameModal({ isOpen, onClose, gameAddress, minEntry }: JoinGameModalProps) {
     const { account, signAndSubmitTransaction } = useWallet();
@@ -158,6 +158,49 @@ export function JoinGameModal({ isOpen, onClose, gameAddress, minEntry }: JoinGa
             await aptosClient.waitForTransaction({
                 transactionHash: response.hash,
             });
+
+            // 获取交易详情及事件
+            const txDetails = await aptosClient.getTransactionByHash({
+                transactionHash: response.hash,
+            });
+
+            // 从交易详情中获取事件
+            const events = txDetails.events || [];
+
+            // 检查是否有GameResult事件（表示第一张牌为Joker，直接失败）
+            let gameResultEvent = null;
+            for (const event of events) {
+                if (event.type?.includes("GameResult")) {
+                    gameResultEvent = event;
+                    break;
+                }
+            }
+
+            // 如果找到GameResult事件，说明第一张牌为Joker，直接失败
+            if (gameResultEvent && gameResultEvent.data) {
+                const { number1, number2, player_product, target_product, is_win } = gameResultEvent.data as any;
+
+                setFirstCard(parseInt(number1)); // 应该为0（Joker）
+
+                // 设置抽取的随机数和结果
+                setDrawnNumbers({
+                    number1: parseInt(number1),
+                    number2: parseInt(number2),
+                    playerProduct: parseInt(player_product),
+                    targetProduct: parseInt(target_product),
+                    isWin: false
+                });
+
+                // 设置结果状态
+                setResult({
+                    status: "failure",
+                    message: "抽到了Joker牌！根据游戏规则，您自动失败。"
+                });
+
+                setGameState("joker-fail");
+                setJoining(false);
+                return;
+            }
 
             // 等待一小段时间确保区块链数据已更新
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -364,9 +407,12 @@ export function JoinGameModal({ isOpen, onClose, gameAddress, minEntry }: JoinGa
     const renderGameContent = () => {
         if (isLoading) {
             return (
-                <div className="flex flex-col items-center gap-4">
-                    <p>加载中，请稍候...</p>
-                    <div className="nes-progress is-pattern">
+                <div className="flex flex-col items-center justify-center py-8">
+                    <div className="mb-4 text-center">
+                        <i className="nes-icon coin is-large animate-bounce"></i>
+                    </div>
+                    <p className="mb-4 text-lg">加载游戏数据中...</p>
+                    <div className="nes-progress w-full max-w-md">
                         <progress className="nes-progress is-primary" value="70" max="100"></progress>
                     </div>
                 </div>
@@ -376,88 +422,124 @@ export function JoinGameModal({ isOpen, onClose, gameAddress, minEntry }: JoinGa
         switch (gameState) {
             case "input":
                 return (
-                    <form onSubmit={handleJoinGame} className="flex flex-col gap-4">
-                        <div className="nes-field">
-                            <label htmlFor="entry-fee">入场费 (APT)</label>
-                            <input
-                                id="entry-fee"
-                                type="number"
-                                className="nes-input"
-                                step="0.1"
-                                min={minEntry}
-                                value={entryFee}
-                                onChange={(e) => setEntryFee(e.target.value)}
-                                required
-                            />
-                        </div>
-
-                        {error && (
-                            <div className="nes-container is-error">
-                                <p>{error}</p>
+                    <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-lg p-6 border-2 border-yellow-400 shadow-lg">
+                        <form onSubmit={handleJoinGame} className="flex flex-col gap-6">
+                            <div className="nes-field">
+                                <label htmlFor="entry-fee" className="text-yellow-300 mb-2 block font-bold">入场费 (APT)</label>
+                                <div className="relative">
+                                    <input
+                                        id="entry-fee"
+                                        type="number"
+                                        className="nes-input is-dark w-full border-yellow-400"
+                                        step="0.1"
+                                        min={minEntry}
+                                        value={entryFee}
+                                        onChange={(e) => setEntryFee(e.target.value)}
+                                        required
+                                    />
+                                    <span className="absolute right-3 top-2 text-yellow-300">APT</span>
+                                </div>
+                                <p className="mt-2 text-xs text-yellow-200">*最低入场费: {minEntry} APT</p>
                             </div>
-                        )}
 
-                        <button
-                            type="submit"
-                            className={cn(
-                                "nes-btn is-primary",
-                                joining && "is-disabled cursor-not-allowed"
+                            {error && (
+                                <div className="nes-container is-error p-3">
+                                    <p className="text-sm">{error}</p>
+                                </div>
                             )}
-                            disabled={joining}
-                        >
-                            {joining ? "加入中..." : "加入游戏"}
-                        </button>
-                    </form>
+
+                            <div className="flex justify-center">
+                                <button
+                                    type="submit"
+                                    className={cn(
+                                        "nes-btn is-primary px-8 py-2 transition transform hover:scale-105",
+                                        joining && "is-disabled cursor-not-allowed"
+                                    )}
+                                    disabled={joining}
+                                >
+                                    {joining ?
+                                        <span className="flex items-center">
+                                            <i className="nes-icon is-small star mr-2 animate-pulse"></i>
+                                            加入中...
+                                        </span> :
+                                        <span className="flex items-center">
+                                            <i className="nes-icon is-small coin mr-2"></i>
+                                            加入游戏
+                                        </span>
+                                    }
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 );
 
             case "processing":
                 return (
-                    <div className="flex flex-col items-center gap-4">
-                        <p>正在支付入场费并抽取第一张牌，请稍候...</p>
-                        <div className="nes-progress is-pattern">
+                    <div className="flex flex-col items-center gap-6 py-8">
+                        <div className="relative">
+                            <PlayingCard value={null} size="large" />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="animate-ping absolute inline-flex h-12 w-12 rounded-full bg-yellow-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-8 w-8 bg-yellow-500"></span>
+                            </div>
+                        </div>
+                        <p className="text-lg">正在支付入场费并抽取第一张牌...</p>
+                        <div className="nes-progress is-pattern w-full max-w-md">
                             <progress className="nes-progress is-primary" value="70" max="100"></progress>
                         </div>
+                        <p className="text-sm text-gray-400">交易正在区块链上确认中，这可能需要几秒钟时间</p>
                     </div>
                 );
 
             case "first-draw":
             case "decision":
                 return (
-                    <div className="flex flex-col gap-4">
-                        <div className="nes-container is-dark">
-                            <h3 className="mb-2">您的第一张卡牌</h3>
-                            <div className="flex justify-center mb-4">
-                                <div className="flex flex-col items-center">
+                    <div className="flex flex-col gap-6">
+                        <div className="nes-container is-dark with-title p-4 bg-gradient-to-br from-gray-700 to-gray-900 border-2 border-yellow-400">
+                            <p className="title bg-yellow-600 px-2">您的第一张卡牌</p>
+                            <div className="flex justify-center mb-6 mt-4">
+                                <div className="transform hover:scale-105 transition-transform duration-300">
                                     {firstCard !== null ? (
-                                        <>
-                                            <PlayingCard value={firstCard} size="large" />
-                                            <span className="mt-1">
+                                        <div className="flex flex-col items-center">
+                                            <div className="mb-2 relative">
+                                                <PlayingCard value={firstCard} size="large" />
+                                                <div className="absolute -top-3 -right-3 bg-yellow-400 text-black rounded-full h-8 w-8 flex items-center justify-center font-bold">
+                                                    {firstCard}
+                                                </div>
+                                            </div>
+                                            <div className="mt-2 px-4 py-1 bg-yellow-600 rounded-full text-white text-sm">
                                                 {getCardName(firstCard)}
-                                            </span>
-                                        </>
+                                            </div>
+                                        </div>
                                     ) : (
-                                        <div className="w-16 h-24 flex items-center justify-center bg-gray-700 rounded-md border-2 border-white">
+                                        <div className="w-24 h-36 flex items-center justify-center bg-gray-700 rounded-md border-2 border-white animate-pulse">
                                             <span>等待...</span>
                                         </div>
                                     )}
                                 </div>
                             </div>
 
-                            <p className="text-center mb-4">您现在可以选择继续游戏或退出</p>
+                            <div className="nes-container is-rounded is-dark mb-4 p-3">
+                                <p className="text-center text-yellow-200">
+                                    决定时刻! 继续抽第二张牌还是现在就退出?
+                                </p>
+                            </div>
 
-                            <div className="flex gap-2">
+                            <div className="grid grid-cols-2 gap-4 mt-4">
                                 <button
-                                    className="nes-btn is-primary flex-1"
+                                    className="nes-btn is-primary flex items-center justify-center"
                                     onClick={handleContinueGame}
                                     disabled={firstCard === null || gameState === "processing"}
                                 >
+                                    <i className="nes-icon trophy mr-2"></i>
                                     继续游戏
                                 </button>
                                 <button
-                                    className="nes-btn is-error flex-1"
+                                    className="nes-btn is-error flex items-center justify-center"
                                     onClick={handleQuitGame}
                                     disabled={firstCard === null || gameState === "processing"}
                                 >
+                                    <i className="nes-icon close mr-2"></i>
                                     退出(退还40%)
                                 </button>
                             </div>
@@ -473,76 +555,184 @@ export function JoinGameModal({ isOpen, onClose, gameAddress, minEntry }: JoinGa
 
             case "processing-continue":
                 return (
-                    <div className="flex flex-col items-center gap-4">
-                        <p>正在抽取第二张牌...</p>
-                        <div className="nes-progress is-pattern">
+                    <div className="flex flex-col items-center gap-6 py-8">
+                        <div className="flex items-center gap-10">
+                            <div className="relative">
+                                <PlayingCard value={firstCard || 0} size="large" />
+                            </div>
+                            <div className="text-2xl">+</div>
+                            <div className="relative">
+                                <PlayingCard value={null} size="large" className="animate-pulse" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="animate-ping absolute inline-flex h-10 w-10 rounded-full bg-yellow-400 opacity-75"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p className="text-lg">正在抽取第二张牌...</p>
+                        <div className="nes-progress is-pattern w-full max-w-md">
                             <progress className="nes-progress is-primary" value="70" max="100"></progress>
                         </div>
+                        <p className="text-sm text-gray-400">交易正在区块链上确认中，这可能需要几秒钟时间</p>
                     </div>
                 );
 
             case "result":
                 return (
-                    <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-6">
                         {result && (
                             <div
-                                className={`nes-container ${result.status === "success" ? "is-success" : "is-error"}`}
+                                className={`nes-container ${result.status === "success" ? "is-success" : "is-error"} p-4`}
                             >
-                                <p>{result.message}</p>
+                                <div className="flex items-center">
+                                    <i className={`nes-icon ${result.status === "success" ? "trophy" : "heart empty"} mr-3`}></i>
+                                    <p className="font-bold">{result.message}</p>
+                                </div>
                             </div>
                         )}
 
                         {drawnNumbers && (
-                            <div className="nes-container is-dark">
-                                <h3 className="mb-2">卡牌抽取结果</h3>
-                                <div className="flex justify-center gap-4 mb-4">
-                                    <div className="flex flex-col items-center">
-                                        <PlayingCard value={drawnNumbers.number1} size="large" />
-                                        <span className="mt-1">
-                                            {getCardName(drawnNumbers.number1)}
-                                        </span>
+                            <div className="nes-container is-dark with-title bg-gradient-to-br from-gray-700 to-gray-900 border-2 border-indigo-400">
+                                <p className="title bg-indigo-600 px-2">游戏结果</p>
+                                <div className="flex flex-col items-center mt-4">
+                                    <div className="flex justify-center items-center gap-2 mb-6">
+                                        <div className="transform transition-all duration-300 hover:scale-110">
+                                            <PlayingCard value={drawnNumbers.number1} size="large" />
+                                            <div className="mt-1 text-center">
+                                                {getCardName(drawnNumbers.number1)}
+                                            </div>
+                                        </div>
+                                        <div className="text-2xl font-bold mx-2">×</div>
+                                        <div className="transform transition-all duration-300 hover:scale-110">
+                                            <PlayingCard value={drawnNumbers.number2} size="large" />
+                                            <div className="mt-1 text-center">
+                                                {getCardName(drawnNumbers.number2)}
+                                            </div>
+                                        </div>
+                                        <div className="text-2xl font-bold mx-2">=</div>
+                                        <div className="flex flex-col items-center">
+                                            <div className="h-24 w-24 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center">
+                                                <span className="text-3xl font-bold">{drawnNumbers.playerProduct}</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="text-2xl flex items-center">×</div>
-                                    <div className="flex flex-col items-center">
-                                        <PlayingCard value={drawnNumbers.number2} size="large" />
-                                        <span className="mt-1">
-                                            {getCardName(drawnNumbers.number2)}
-                                        </span>
-                                    </div>
-                                    <div className="text-2xl flex items-center">=</div>
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-3xl font-bold">{drawnNumbers.playerProduct}</span>
-                                    </div>
-                                </div>
 
-                                <div className="text-center">
-                                    <p className="mb-2">
-                                        您的乘积: {drawnNumbers.playerProduct} (
-                                        {drawnNumbers.number1} × {drawnNumbers.number2})
-                                    </p>
-                                    <p>目标乘积: {drawnNumbers.targetProduct}</p>
-                                </div>
+                                    <div className="grid grid-cols-2 gap-4 w-full max-w-md bg-gray-800 p-4 rounded-lg mb-4">
+                                        <div className="text-right text-gray-300">您的乘积:</div>
+                                        <div className="font-bold text-white">{drawnNumbers.playerProduct}</div>
+                                        <div className="text-right text-gray-300">目标乘积:</div>
+                                        <div className="font-bold text-white">{drawnNumbers.targetProduct}</div>
+                                    </div>
 
-                                <div className="text-center mt-3">
-                                    {drawnNumbers.isWin ? (
-                                        <p className="text-green-500 font-bold">🎉 您的乘积大于目标乘积，您赢了！</p>
-                                    ) : (
-                                        <p className="text-red-400 font-bold">💔 您的乘积小于或等于目标乘积，您输了。</p>
-                                    )}
+                                    <div className={`nes-container ${drawnNumbers.isWin ? 'is-success' : 'is-error'} w-full p-3 mb-4`}>
+                                        {drawnNumbers.isWin ? (
+                                            <div className="flex items-center justify-center">
+                                                <i className="nes-icon trophy mr-2"></i>
+                                                <p className="font-bold">您的乘积大于目标乘积，胜利！</p>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-center">
+                                                <i className="nes-icon heart empty mr-2"></i>
+                                                <p className="font-bold">您的乘积小于或等于目标乘积，很遗憾！</p>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         )}
 
-                        <div className="flex gap-2">
-                            <button className="nes-btn is-primary flex-1" onClick={onClose}>
+                        <div className="flex gap-4 mt-2">
+                            <button className="nes-btn is-primary flex-1 flex items-center justify-center" onClick={onClose}>
+                                <i className="nes-icon close mr-2"></i>
                                 关闭
                             </button>
                             <button
-                                className="nes-btn is-primary flex-1"
+                                className="nes-btn is-warning flex-1 flex items-center justify-center"
                                 onClick={handleReset}
                             >
+                                <i className="nes-icon coin mr-2"></i>
                                 再玩一次
                             </button>
+                        </div>
+                    </div>
+                );
+
+            case "joker-fail":
+                return (
+                    <div className="flex flex-col gap-6 relative overflow-hidden">
+                        {/* 小丑粒子效果 - 背景装饰 */}
+                        <div className="joker-particles absolute inset-0 pointer-events-none" id="joker-particles">
+                            {Array.from({ length: 20 }).map((_, i) => (
+                                <div key={i} className="joker-emoji" style={{
+                                    left: `${Math.random() * 100}%`,
+                                    animationDelay: `${Math.random() * 2}s`,
+                                    animationDuration: `${3 + Math.random() * 4}s`
+                                }}>
+                                    {Math.random() > 0.5 ? '🃏' : '🤡'}
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="nes-container is-error with-title p-4 bg-gradient-to-br from-gray-700 to-gray-900 border-2 border-red-500 z-10 relative">
+                            <p className="title bg-red-600 px-2 text-white font-bold animate-pulse">GAME OVER</p>
+
+                            {/* 旋转的大小丑牌 */}
+                            <div className="flex justify-center mb-6 mt-4">
+                                <div className="transform hover:scale-110 transition-transform duration-300 joker-card-spin">
+                                    <div className="flex flex-col items-center relative">
+                                        <div className="mb-2 relative joker-glow">
+                                            <PlayingCard value={0} size="large" />
+                                            <div className="absolute -inset-4 bg-red-500 opacity-20 blur-xl rounded-full pulse-glow"></div>
+                                        </div>
+                                        <div className="mt-2 px-4 py-1 bg-red-600 rounded-full text-white text-sm joker-badge-wobble">
+                                            Joker 小丑牌
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 闪烁的失败消息 */}
+                            <div className="nes-container is-error mb-4 p-3 joker-message-shake">
+                                <div className="flex items-center justify-center">
+                                    <i className="nes-icon close mr-2"></i>
+                                    <p className="font-bold text-lg">哈哈哈！小丑牌选中了你！游戏结束！</p>
+                                </div>
+                            </div>
+
+                            {/* 嘲讽性语录轮播 */}
+                            <div className="joker-quotes mb-4 p-2 bg-black rounded-lg">
+                                <p className="text-yellow-300 text-center font-pixel animate-bounce">
+                                    "有时候，运气就是这么差~"
+                                </p>
+                            </div>
+
+                            <div className="flex gap-4 mt-4">
+                                <button
+                                    className="nes-btn is-primary flex-1 flex items-center justify-center relative overflow-hidden"
+                                    onClick={onClose}
+                                >
+                                    <span className="z-10 relative flex items-center">
+                                        <i className="nes-icon close mr-2"></i>
+                                        关闭
+                                    </span>
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent shimmer-effect"></div>
+                                </button>
+                                <button
+                                    className="nes-btn is-warning flex-1 flex items-center justify-center animate-pulse"
+                                    onClick={handleReset}
+                                >
+                                    <i className="nes-icon coin mr-2"></i>
+                                    再来一次！
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 浮动的讽刺表情 */}
+                        <div className="absolute right-4 top-10 floating-emoji">
+                            <span className="text-4xl">😂</span>
+                        </div>
+                        <div className="absolute left-4 bottom-10 floating-emoji" style={{ animationDelay: "1.5s" }}>
+                            <span className="text-4xl">🤣</span>
                         </div>
                     </div>
                 );
@@ -551,43 +741,57 @@ export function JoinGameModal({ isOpen, onClose, gameAddress, minEntry }: JoinGa
 
     return (
         <GameModal isOpen={isOpen} onClose={onClose} title="加入游戏">
-            <div className="flex flex-col gap-4">
-                <div className="nes-container is-dark with-title">
-                    <p className="title">游戏信息</p>
-                    <p className="text-sm mb-2 break-all">游戏地址: {gameAddress}</p>
+            <div className="flex flex-col gap-5">
+                <div className="nes-container is-dark with-title bg-gradient-to-r from-gray-800 to-gray-900 border-2 border-purple-500 shadow-lg">
+                    <p className="title bg-purple-600 px-3">游戏信息</p>
+                    <div className="text-xs mb-3 text-gray-400 bg-gray-800 p-2 rounded overflow-hidden">
+                        <span className="font-bold text-purple-300">游戏地址: </span>
+                        <span className="break-all">{gameAddress}</span>
+                    </div>
 
                     {gameInfo ? (
-                        <>
-                            <div className="mb-3">
-                                <p className="mb-2">游戏目标卡牌：</p>
-                                <div className="flex justify-center gap-4 mb-2">
-                                    <div className="flex flex-col items-center">
-                                        <PlayingCard value={gameInfo.targetNum1} size="small" />
-                                        <span className="mt-1">{getCardName(gameInfo.targetNum1)}</span>
-                                    </div>
-                                    <div className="text-xl flex items-center">×</div>
-                                    <div className="flex flex-col items-center">
-                                        <PlayingCard value={gameInfo.targetNum2} size="small" />
-                                        <span className="mt-1">{getCardName(gameInfo.targetNum2)}</span>
-                                    </div>
-                                    <div className="text-xl flex items-center">=</div>
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-2xl font-bold">{gameInfo.targetNum1 * gameInfo.targetNum2}</span>
+                        <div className="bg-gray-800 rounded-lg p-3">
+                            <h4 className="text-center text-purple-300 mb-3 font-bold">游戏目标</h4>
+                            <div className="flex justify-center gap-3 mb-4 bg-gray-900 p-3 rounded-lg">
+                                <div className="flex flex-col items-center">
+                                    <PlayingCard value={gameInfo.targetNum1} size="small" className="transition transform hover:scale-110" />
+                                    <span className="mt-1 text-sm">{getCardName(gameInfo.targetNum1)}</span>
+                                </div>
+                                <div className="text-xl flex items-center">×</div>
+                                <div className="flex flex-col items-center">
+                                    <PlayingCard value={gameInfo.targetNum2} size="small" className="transition transform hover:scale-110" />
+                                    <span className="mt-1 text-sm">{getCardName(gameInfo.targetNum2)}</span>
+                                </div>
+                                <div className="text-xl flex items-center">=</div>
+                                <div className="flex flex-col items-center">
+                                    <div className="h-12 w-12 rounded-full bg-purple-600 flex items-center justify-center">
+                                        <span className="text-xl font-bold">{gameInfo.targetNum1 * gameInfo.targetNum2}</span>
                                     </div>
                                 </div>
-                                <p className="text-sm text-center mb-3">
-                                    要赢得游戏，您抽取的两张牌乘积需要大于 {gameInfo.targetNum1 * gameInfo.targetNum2}
-                                </p>
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div>最低入场费:</div>
-                                <div>{gameInfo.minEntry.toFixed(2)} APT</div>
-                                <div>当前奖池:</div>
-                                <div>{gameInfo.poolValue.toFixed(2)} APT</div>
+
+                            <p className="text-sm text-center mb-4 text-yellow-200 bg-gray-900 p-2 rounded-lg">
+                                抽取的两张牌乘积需大于 <span className="font-bold">{gameInfo.targetNum1 * gameInfo.targetNum2}</span> 才能赢!
+                            </p>
+
+                            <div className="grid grid-cols-2 gap-2 bg-gray-900 p-3 rounded-lg">
+                                <div className="text-right text-gray-300">最低入场费:</div>
+                                <div className="font-bold flex items-center">
+                                    <i className="nes-icon coin is-small mr-1"></i>
+                                    <span>{gameInfo.minEntry.toFixed(2)} APT</span>
+                                </div>
+                                <div className="text-right text-gray-300">当前奖池:</div>
+                                <div className="font-bold text-yellow-300 flex items-center">
+                                    <i className="nes-icon coin is-small mr-1"></i>
+                                    <span>{gameInfo.poolValue.toFixed(2)} APT</span>
+                                </div>
                             </div>
-                        </>
+                        </div>
                     ) : (
-                        <p>最低入场费: {minEntry} APT</p>
+                        <p className="flex items-center">
+                            <i className="nes-icon coin is-small mr-2"></i>
+                            最低入场费: {minEntry} APT
+                        </p>
                     )}
                 </div>
 

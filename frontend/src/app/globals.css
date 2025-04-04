@@ -83,3 +83,172 @@ input[type="number"].nes-input {
     flex-direction: column;
   }
 }
+
+/* 小丑粒子效果 */
+@keyframes jokerFall {
+  0% {
+    transform: translateY(-50px) rotate(0deg);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(calc(100vh + 50px)) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+.joker-emoji {
+  position: absolute;
+  top: -50px;
+  font-size: 24px;
+  animation: jokerFall linear forwards;
+  z-index: 5;
+}
+
+/* 小丑牌旋转效果 */
+@keyframes jokerspin {
+  0% {
+    transform: rotateY(0deg);
+  }
+
+  100% {
+    transform: rotateY(360deg);
+  }
+}
+
+.joker-card-spin {
+  animation: jokerspin 3s infinite linear;
+  transform-style: preserve-3d;
+}
+
+/* 脉冲光晕效果 */
+@keyframes pulseGlow {
+  0% {
+    opacity: 0.1;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 0.3;
+    transform: scale(1.1);
+  }
+
+  100% {
+    opacity: 0.1;
+    transform: scale(0.8);
+  }
+}
+
+.pulse-glow {
+  animation: pulseGlow 2s infinite;
+}
+
+/* 晃动效果 */
+@keyframes wobble {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  15% {
+    transform: translateX(-5px) rotate(-5deg);
+  }
+
+  30% {
+    transform: translateX(5px) rotate(5deg);
+  }
+
+  45% {
+    transform: translateX(-5px) rotate(-3deg);
+  }
+
+  60% {
+    transform: translateX(5px) rotate(3deg);
+  }
+
+  75% {
+    transform: translateX(-5px) rotate(-1deg);
+  }
+
+  90% {
+    transform: translateX(5px) rotate(1deg);
+  }
+}
+
+.joker-badge-wobble {
+  animation: wobble 3s infinite;
+}
+
+/* 消息抖动效果 */
+@keyframes messageShake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-5px);
+  }
+
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+.joker-message-shake {
+  animation: messageShake 0.8s cubic-bezier(.36, .07, .19, .97) both;
+  animation-iteration-count: infinite;
+}
+
+/* 闪光效果 */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer-effect {
+  opacity: 0.3;
+  animation: shimmer 2s infinite;
+}
+
+/* 浮动表情 */
+@keyframes floating {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.floating-emoji {
+  animation: floating 3s ease-in-out infinite;
+}
+
+/* 像素风格字体 */
+.font-pixel {
+  font-family: 'kongtext', monospace;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.7);
+  letter-spacing: 1px;
+}

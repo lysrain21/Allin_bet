@@ -5,6 +5,7 @@ import { getAptosClient } from "@/utils/aptosClient";
 import { ABI } from "@/utils/abi";
 import { GameInfo } from "./GameInfo";
 import { JoinGameModal } from "./JoinGameModal";
+import { FaGamepad, FaSpinner, FaExclamationTriangle } from "react-icons/fa";
 
 const aptosClient = getAptosClient();
 
@@ -24,10 +25,8 @@ export function GamesList() {
                 setError(null);
 
                 // 直接硬编码一些测试地址，在合约修复前临时使用
-                // 您可以将您创建的游戏池地址添加到这个数组中
                 const hardcodedAddresses: string[] = [
                     // 如果您已经创建了游戏池，请在这里添加它们的地址
-                    // 例如: "0xe1f4f297aa4bacca3574574e0323b1bbafb64c89324310f9950a01a35324a3ac"
                 ];
 
                 try {
@@ -89,34 +88,75 @@ export function GamesList() {
     };
 
     if (loading) {
-        return <div className="nes-container is-dark">正在加载游戏列表...</div>;
+        return (
+            <div className="nes-container is-dark p-8 max-w-4xl mx-auto">
+                <div className="flex flex-col items-center justify-center space-y-4 py-12">
+                    <div className="nes-icon is-large star animate-pulse"></div>
+                    <p className="nes-text is-primary text-lg">正在加载游戏列表...</p>
+                    <div className="w-full h-4 nes-progress is-primary">
+                        <progress className="nes-progress is-primary" value="70" max="100"></progress>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (gameAddresses.length === 0) {
         return (
-            <div className="nes-container is-dark">
-                {error || "当前没有可用的游戏。请先创建一个游戏池。"}
+            <div className="nes-container is-dark p-8 max-w-4xl mx-auto">
+                <div className="flex flex-col items-center justify-center py-12">
+                    <div className="nes-icon is-large heart mb-4 animate-bounce"></div>
+                    <p className="nes-text is-error text-center text-lg mb-4">
+                        {error || "当前没有可用的游戏"}
+                    </p>
+                    <p className="text-center">请先创建一个游戏池</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-6 max-w-5xl mx-auto">
             {error && (
-                <div className="nes-container is-warning">{error}</div>
+                <div className="nes-container is-warning p-4 border-4 shadow-lg">
+                    <div className="flex items-center space-x-3">
+                        <FaExclamationTriangle className="text-yellow-600" />
+                        <p>{error}</p>
+                    </div>
+                </div>
             )}
-            <div className="nes-container is-dark with-title">
-                <p className="title">可用游戏</p>
-                <div className="flex flex-col gap-4">
+            <div className="nes-container is-dark with-title border-4 shadow-2xl">
+                <p className="title bg-gray-900 px-4 py-1 flex items-center">
+                    <FaGamepad className="mr-2" /> 可用游戏
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                     {gameAddresses.map((address) => (
-                        <div key={address} className="nes-container is-rounded">
-                            <div className="mb-2">
-                                <p className="text-sm break-all">游戏地址: {address}</p>
+                        <div
+                            key={address}
+                            className="nes-container is-rounded border-4 bg-gray-800 hover:bg-gray-700 transition-colors duration-300 shadow-lg"
+                        >
+                            <div className="mb-4 bg-gray-900 p-2 rounded">
+                                <p className="text-xs md:text-sm break-all font-mono text-green-400">
+                                    <span className="text-yellow-400 mr-1">游戏ID:</span>
+                                    <span className="select-all">{address.slice(0, 10)}...{address.slice(-10)}</span>
+                                    <button
+                                        className="nes-btn is-small is-primary float-right px-1 py-0"
+                                        onClick={() => navigator.clipboard.writeText(address)}
+                                        title="复制地址"
+                                    >
+                                        复制
+                                    </button>
+                                </p>
                             </div>
-                            <GameInfo gameAddress={address} />
-                            <div className="mt-4">
+
+                            <div className="bg-gray-900/30 p-3 rounded">
+                                <GameInfo gameAddress={address} />
+                            </div>
+
+                            <div className="mt-4 flex justify-center">
                                 <button
-                                    className="nes-btn is-primary"
+                                    className="nes-btn is-primary is-large px-6 py-2 hover:brightness-110 transition-all duration-200"
                                     onClick={() => openJoinModal(address)}
                                 >
                                     加入游戏

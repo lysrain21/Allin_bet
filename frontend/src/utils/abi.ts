@@ -1,5 +1,5 @@
 export const ABI = {
-    "address": "0xfe2e4fc00ec0bb98e4c774bbefc382a28f176c4af976bd41333741d7ca015fd4",
+    "address": "0xd4af3984ba023aacbbaecc0aab028de63c404e5b6cf9a1189fe17262099d2352",
     "name": "allin_bet",
     "exposed_functions": [
         {

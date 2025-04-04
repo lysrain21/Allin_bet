@@ -73,18 +73,20 @@ export function JoinGame() {
             // 从交易详情中获取事件
             const events = txDetails.events || [];
 
-            // 查找GameResult事件
+            // 查找FirstNumberDrawn事件和GameResult事件
+            let firstNumberEvent = null;
             let gameResultEvent = null;
-            if (events) {
-                for (const event of events) {
-                    if (event.type?.includes("GameResult")) {
-                        gameResultEvent = event;
-                        break;
-                    }
+
+            for (const event of events) {
+                if (event.type?.includes("FirstNumberDrawn")) {
+                    firstNumberEvent = event;
+                }
+                if (event.type?.includes("GameResult")) {
+                    gameResultEvent = event;
                 }
             }
 
-            // 如果找到了事件，解析事件数据
+            // 如果找到了GameResult事件，解析事件数据
             if (gameResultEvent && gameResultEvent.data) {
                 const { number1, number2, player_product, target_product, is_win } = gameResultEvent.data as any;
 
@@ -97,13 +99,21 @@ export function JoinGame() {
                     isWin: is_win
                 });
 
-                // 设置游戏结果
-                setResult({
-                    status: is_win ? "success" : "failure",
-                    message: is_win
-                        ? "恭喜！你赢了！请查看你的钱包余额。"
-                        : "很遗憾，这次你没有赢。再试一次！",
-                });
+                // 特殊情况：如果第一张牌是Joker（值为0）
+                if (parseInt(number1) === 0) {
+                    setResult({
+                        status: "failure",
+                        message: "您抽到了Joker！根据特殊规则，游戏直接结束。"
+                    });
+                } else {
+                    // 正常情况
+                    setResult({
+                        status: is_win ? "success" : "failure",
+                        message: is_win
+                            ? "恭喜！你赢了！请查看你的钱包余额。"
+                            : "很遗憾，这次你没有赢。再试一次！",
+                    });
+                }
             } else {
                 // 如果没有找到事件，使用替代信息
                 setResult({
